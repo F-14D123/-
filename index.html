@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Битва против клонов</title>
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #222; overflow: hidden; cursor: crosshair; font-family: sans-serif; touch-action: none; }
+  canvas { display: block; }
+  #over, #menu, #maps, #mainmenu, #settings, #pause, #platform {
+    position: fixed; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.85); z-index: 10;
+  }
+  #platform { display: flex; }
+  #mainmenu { display: none; }
+  #over h1 { color: #ff2b2b; font-size: 42px; text-align: center; margin: 0 0 40px; }
+  #pause h1 { color: #fff; font-size: 42px; margin: 0 0 40px; }
+  #menu h1, #maps h1, #mainmenu h1, #settings h1, #platform h1 { color: #fff; font-size: 32px; margin: 0 0 30px; text-align: center; }
+  .items { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 1100px; }
+  .btn {
+    background: #333; border: 3px solid #555; border-radius: 12px;
+    padding: 18px 22px; cursor: pointer; text-align: center; color: #fff;
+    transition: 0.15s; min-width: 140px;
+  }
+  .btn:hover { border-color: #4fc3f7; background: #3a3a3a; }
+  .btn img { width: 130px; height: 55px; object-fit: contain; display: block; margin: 0 auto 10px; }
+  .btn b { font-size: 17px; display: block; margin-bottom: 6px; }
+  .btn span { font-size: 12px; color: #aaa; }
+  .btn .preview { width: 150px; height: 90px; border-radius: 6px; margin: 0 auto 12px; }
+  .btn.locked { opacity: 0.5; cursor: not-allowed; }
+  .btn.locked:hover { border-color: #555; background: #333; }
+  .main-btn {
+    font-size: 26px; padding: 16px 50px; margin: 8px; cursor: pointer;
+    border: none; border-radius: 10px; background: #4fc3f7; color: #000;
+    font-weight: bold; min-width: 240px;
+  }
+  .main-btn:hover { background: #6fd0ff; }
+  #over button {
+    font-size: 26px; padding: 14px 40px; cursor: pointer;
+    border: none; border-radius: 8px; background: #4fc3f7;
+  }
+  /* мобильные стрелки */
+  #mobileControls { position: fixed; left: 20px; bottom: 20px; z-index: 5; display: none; }
+  #mobileControls .row { display: flex; justify-content: center; }
+  .arr {
+    width: 60px; height: 60px; margin: 4px;
+    background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.5);
+    border-radius: 12px; color: #fff; font-size: 28px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; touch-action: none;
+  }
+  .arr:active { background: rgba(79,195,247,0.6); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="platform">
+  <h1>На чём играешь?</h1>
+  <button class="main-btn" onclick="pickPlatform('pc')">ПК</button>
+  <button class="main-btn" onclick="pickPlatform('mobile')">Телефон</button>
+</div>
+
+<div id="mainmenu">
+  <h1>Битва против клонов</h1>
+  <button class="main-btn" onclick="showMenu('menu')">Играть</button>
+  <button class="main-btn" onclick="showMenu('settings')">Настройки</button>
+</div>
+
+<div id="settings">
+  <h1>Настройки</h1>
+  <p style="color:#aaa; font-size:24px; margin-bottom:40px;">скоро…</p>
+  <button class="main-btn" onclick="showMenu('mainmenu')">Назад</button>
+</div>
+
+<div id="menu">
+  <h1>Выбери оружие</h1>
+  <div class="items">
+    <div class="btn" onclick="chooseWeapon('ak')">
+      <img src="textoures/АК-47.png" alt="АК-47">
+      <b>АК-47</b>
+      <span>625 выстр/мин · 3 попадания</span>
+    </div>
+    <div class="btn" onclick="chooseWeapon('mosin')">
+      <img src="textoures/МОСИНА.png" alt="Винтовка Мосина">
+      <b>Винтовка Мосина</b>
+      <span>1.5 выстр/сек · пробивает · урон 4</span>
+    </div>
+    <div class="btn" onclick="chooseWeapon('shotgun')">
+      <img src="textoures/Дробовик.png" alt="Дробовик">
+      <b>Дробовик</b>
+      <span>1 выстр/сек · 5 дробинок · разброс 35°</span>
+    </div>
+  </div>
+</div>
+
+<div id="maps">
+  <h1>Выбери карту</h1>
+  <div class="items">
+    <div class="btn locked" onclick="return false">
+      <div class="preview" style="background:linear-gradient(135deg,#c8a86a,#8a6d3b)"></div>
+      <b>Даст из CS2</b>
+      <span>скоро…</span>
+    </div>
+    <div class="btn" onclick="startGame('village')">
+      <div class="preview" style="background:linear-gradient(135deg,#6fa34a,#3f6b2a)"></div>
+      <b>Деревня</b>
+      <span>трава, домики, дороги</span>
+    </div>
+  </div>
+</div>
+
+<div id="pause">
+  <h1>Пауза</h1>
+  <button class="main-btn" onclick="resumeGame()">Продолжить</button>
+  <button class="main-btn" onclick="pauseToMenu()">Меню</button>
+</div>
+
+<div id="over">
+  <h1 id="overText">эээ ну это мой клип пиарят</h1>
+  <button onclick="restart()">заново</button>
+</div>
+
+<div id="mobileControls">
+  <div class="row"><div class="arr" data-key="KeyW">↑</div></div>
+  <div class="row">
+    <div class="arr" data-key="KeyA">←</div>
+    <div class="arr" data-key="KeyS">↓</div>
+    <div class="arr" data-key="KeyD">→</div>
+  </div>
+</div>
+
+<script>
+const c = document.getElementById('c'), x = c.getContext('2d');
+c.width = innerWidth;
+c.height = innerHeight;
+
+let px = c.width / 2, py = c.height / 2;
+let r = 40, speed = 4;
+const keys = {};
+let mx = 0, my = 0;
+let mouseDown = false;
+
+let isMobile = false;
+
+const TEX = 'textoures/';
+const img = new Image(); img.src = TEX + 'ЯРИК.jpg';
+const bulImg = new Image(); bulImg.src = TEX + 'пуля.png';
+const cloneImg = new Image(); cloneImg.src = TEX + 'КЛОН.png';
+const andreyImg = new Image(); andreyImg.src = TEX + 'Андрей.jfif';
+const houseImg = new Image(); houseImg.src = TEX + 'ДОМ.png';
+const grassImg = new Image(); grassImg.src = TEX + 'ТРАВА.jfif';
+
+const WEAPONS = {
+  ak: {
+    img: new Image(), w: 80, h: 32, offX: r * 0.4, offY: -16,
+    cooldown: Math.round(60 / (625 / 60)),
+    bulletSpeed: 18, pierce: false, damage: 1, pellets: 1, spread: 0
+  },
+  mosin: {
+    img: new Image(), w: 100, h: 28, offX: r * 0.4, offY: -14,
+    cooldown: Math.round(60 / 1.5),
+    bulletSpeed: 28, pierce: true, damage: 4, pellets: 1, spread: 0
+  },
+  shotgun: {
+    img: new Image(), w: 90, h: 32, offX: r * 0.4, offY: -16,
+    cooldown: 60,
+    bulletSpeed: 16, pierce: false, damage: 1.5, pellets: 5, spread: 35
+  }
+};
+WEAPONS.ak.img.src = TEX + 'АК-47.png';
+WEAPONS.mosin.img.src = TEX + 'МОСИНА.png';
+WEAPONS.shotgun.img.src = TEX + 'Дробовик.png';
+
+const CLONE_HP = 3;
+const CLONE_R = 32;
+const ANDREY_HP = 8;
+const ANDREY_R = Math.round(CLONE_R * 1.5);
+const PLAYER_MAX_HP = 3;
+const CLONE_HIT_COOLDOWN = 1000;
+const SPAWN_INTERVAL = 120;
+const SPAWN_COUNT = 3;
+const SPAWN_MIN_DIST = 250;
+const ANDREY_CHANCE = 0.2;
+
+let weapon = null, mapType = null, started = false, paused = false;
+const bullets = [];
+let clones = [];
+let cooldown = 0, spawnTimer = 0, gameOver = false;
+let startTime = 0, elapsed = 0, pauseStart = 0;
+let playerHp = PLAYER_MAX_HP;
+let lastHitTime = 0;
+
+let houses = [];
+let roads = [];
+
+function resize() {
+  const ow = c.width, oh = c.height;
+  c.width = innerWidth;
+  c.height = innerHeight;
+  if (started && !gameOver) {
+    px = (px / ow) * c.width;
+    py = (py / oh) * c.height;
+    px = Math.max(r, Math.min(c.width - r, px));
+    py = Math.max(r, Math.min(c.height - r, py));
+  }
+}
+addEventListener('resize', resize);
+document.addEventListener('fullscreenchange', () => setTimeout(resize, 50));
+document.addEventListener('webkitfullscreenchange', () => setTimeout(resize, 50));
+
+function pickPlatform(p) {
+  isMobile = (p === 'mobile');
+  document.getElementById('platform').style.display = 'none';
+  document.getElementById('mainmenu').style.display = 'flex';
+}
+
+function showMenu(id) {
+  for (const m of ['mainmenu','settings','menu','maps','pause']) {
+    document.getElementById(m).style.display = 'none';
+  }
+  document.getElementById(id).style.display = 'flex';
+}
+
+function buildVillage() {
+  houses = [
+    { x: 120, y: 120, w: 160, h: 130 },
+    { x: 620, y: 100, w: 170, h: 140 },
+    { x: 1150, y: 130, w: 160, h: 130 },
+    { x: 200, y: 520, w: 170, h: 130 },
+    { x: 700, y: 480, w: 180, h: 150 },
+    { x: 1200, y: 540, w: 160, h: 130 }
+  ];
+  roads = [
+    { x: 280, y: 185, w: 340, h: 40 },
+    { x: 790, y: 185, w: 360, h: 40 },
+    { x: 280, y: 585, w: 420, h: 40 },
+    { x: 880, y: 585, w: 320, h: 40 },
+    { x: 360, y: 220, w: 40, h: 370 },
+    { x: 860, y: 220, w: 40, h: 370 },
+    { x: 400, y: 380, w: 460, h: 40 }
+  ];
+}
+buildVillage();
+
+function chooseWeapon(key) {
+  weapon = WEAPONS[key];
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('maps').style.display = 'flex';
+}
+
+function startGame(mapKey) {
+  if (mapKey !== 'village') return;
+  mapType = mapKey;
+  document.getElementById('maps').style.display = 'none';
+  started = true;
+  paused = false;
+  document.getElementById('mobileControls').style.display = isMobile ? 'block' : 'none';
+  reset();
+}
+
+function restart() {
+  document.getElementById('over').style.display = 'none';
+  document.getElementById('maps').style.display = 'none';
+  document.getElementById('menu').style.display = 'none';
+  document.getElementById('pause').style.display = 'none';
+  document.getElementById('mobileControls').style.display = 'none';
+  document.getElementById('mainmenu').style.display = 'flex';
+  started = false;
+  paused = false;
+  gameOver = false;
+  weapon = null;
+  clones = [];
+  bullets.length = 0;
+}
+
+function reset() {
+  px = c.width / 2;
+  py = c.height / 2;
+  bullets.length = 0;
+  clones = [];
+  cooldown = 0;
+  spawnTimer = 0;
+  gameOver = false;
+  playerHp = PLAYER_MAX_HP;
+  lastHitTime = 0;
+  startTime = performance.now();
+  elapsed = 0;
+  if (collides(px, py, r)) { px = 60; py = 60; }
+}
+
+function collides(x0, y0, rad) {
+  for (const h of houses) {
+    const nx = Math.max(h.x, Math.min(x0, h.x + h.w));
+    const ny = Math.max(h.y, Math.min(y0, h.y + h.h));
+    if ((x0 - nx) ** 2 + (y0 - ny) ** 2 < rad * rad) return true;
+  }
+  return false;
+}
+
+function pauseGame() {
+  if (!started || gameOver) return;
+  paused = true;
+  pauseStart = performance.now();
+  document.getElementById('pause').style.display = 'flex';
+  document.getElementById('mobileControls').style.display = 'none';
+}
+
+function resumeGame() {
+  if (!paused) return;
+  paused = false;
+  startTime += performance.now() - pauseStart;
+  mouseDown = false;
+  document.getElementById('pause').style.display = 'none';
+  document.getElementById('mobileControls').style.display = isMobile ? 'block' : 'none';
+}
+
+function pauseToMenu() {
+  paused = false;
+  started = false;
+  gameOver = false;
+  weapon = null;
+  clones = [];
+  bullets.length = 0;
+  document.getElementById('pause').style.display = 'none';
+  document.getElementById('mobileControls').style.display = 'none';
+  document.getElementById('mainmenu').style.display = 'flex';
+}
+
+function endGame(byAndrey) {
+  gameOver = true;
+  document.getElementById('overText').textContent = byAndrey
+    ? 'цыган горбатый'
+    : 'эээ ну это мой клип пиарят';
+  document.getElementById('over').style.display = 'flex';
+  document.getElementById('mobileControls').style.display = 'none';
+}
+
+addEventListener('keydown', e => {
+  if (e.code === 'Escape') {
+    if (started && !gameOver) {
+      if (paused) resumeGame();
+      else pauseGame();
+    }
+    return;
+  }
+  keys[e.code] = true;
+  if (['KeyW','KeyA','KeyS','KeyD','Space'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseDown = false; });
+
+// ПК: мышь
+addEventListener('mousemove', e => { if (!isMobile) { mx = e.clientX; my = e.clientY; } });
+addEventListener('mousedown', e => { if (!isMobile && e.button === 0) mouseDown = true; });
+addEventListener('mouseup', e => { if (!isMobile && e.button === 0) mouseDown = false; });
+
+// Телефон: тап по экрану = прицел + выстрел
+c.addEventListener('touchstart', e => {
+  if (!isMobile || !started || paused || gameOver) return;
+  const t = e.touches[0];
+  mx = t.clientX;
+  my = t.clientY;
+  mouseDown = true;
+  shoot();
+  e.preventDefault();
+}, { passive: false });
+c.addEventListener('touchmove', e => {
+  if (!isMobile) return;
+  const t = e.touches[0];
+  mx = t.clientX;
+  my = t.clientY;
+  e.preventDefault();
+}, { passive: false });
+c.addEventListener('touchend', e => {
+  if (!isMobile) return;
+  mouseDown = false;
+  e.preventDefault();
+}, { passive: false });
+
+// мобильные стрелки
+for (const el of document.querySelectorAll('#mobileControls .arr')) {
+  const code = el.dataset.key;
+  const press = ev => { ev.preventDefault(); keys[code] = true; };
+  const release = ev => { ev.preventDefault(); keys[code] = false; };
+  el.addEventListener('touchstart', press, { passive: false });
+  el.addEventListener('touchend', release, { passive: false });
+  el.addEventListener('touchcancel', release, { passive: false });
+  el.addEventListener('mousedown', press);
+  el.addEventListener('mouseup', release);
+  el.addEventListener('mouseleave', release);
+}
+
+function spawnBullet(ang, spd, dmg, pierce) {
+  const flip = Math.cos(ang) < 0;
+  const localX = weapon.offX + weapon.w;
+  const localY = flip ? -(weapon.offY + weapon.h / 2) : (weapon.offY + weapon.h / 2);
+
+  const wx = px + Math.cos(ang) * localX - Math.sin(ang) * localY;
+  const wy = py + Math.sin(ang) * localX + Math.cos(ang) * localY;
+
+  bullets.push({
+    x: wx, y: wy,
+    vx: Math.cos(ang) * spd,
+    vy: Math.sin(ang) * spd,
+    ang: ang,
+    pierce: pierce,
+    damage: dmg,
+    hits: new Set()
+  });
+}
+
+function shoot() {
+  if (cooldown > 0 || !weapon || !started || paused || gameOver) return;
+  cooldown = weapon.cooldown;
+
+  const baseAng = Math.atan2(my - py, mx - px);
+
+  if (weapon.pellets > 1) {
+    const spreadRad = weapon.spread * Math.PI / 180;
+    for (let i = 0; i < weapon.pellets; i++) {
+      const a = baseAng + (Math.random() - 0.5) * spreadRad;
+      spawnBullet(a, weapon.bulletSpeed, weapon.damage, weapon.pierce);
+    }
+  } else {
+    spawnBullet(baseAng, weapon.bulletSpeed, weapon.damage, weapon.pierce);
+  }
+}
+
+function spawnPoint(radius, extra) {
+  for (let tries = 0; tries < 100; tries++) {
+    const side = Math.floor(Math.random() * 4);
+    let cx, cy;
+    if (side === 0) { cx = Math.random() * c.width; cy = -radius - extra; }
+    else if (side === 1) { cx = Math.random() * c.width; cy = c.height + radius + extra; }
+    else if (side === 2) { cx = -radius - extra; cy = Math.random() * c.height; }
+    else { cx = c.width + radius + extra; cy = Math.random() * c.height; }
+    if (Math.hypot(px - cx, py - cy) >= SPAWN_MIN_DIST) return { x: cx, y: cy };
+  }
+  return null;
+}
+
+function spawnClones() {
+  for (let i = 0; i < SPAWN_COUNT; i++) {
+    if (Math.random() < ANDREY_CHANCE) {
+      const p = spawnPoint(ANDREY_R, 5);
+      if (!p) continue;
+      clones.push({ x: p.x, y: p.y, r: ANDREY_R, speed: 1.4, id: Math.random(), hp: ANDREY_HP, andrey: true });
+    } else {
+      const p = spawnPoint(CLONE_R, 5);
+      if (!p) continue;
+      clones.push({ x: p.x, y: p.y, r: CLONE_R, speed: 1.6, id: Math.random(), hp: CLONE_HP, andrey: false });
+    }
+  }
+}
+
+function moveWithCollision(obj, dx, dy) {
+  let nx = obj.x + dx, ny = obj.y + dy;
+  if (!collides(nx, obj.y, obj.r)) obj.x = nx;
+  if (!collides(obj.x, ny, obj.r)) obj.y = ny;
+}
+
+function drawMap() {
+  if (grassImg.complete && grassImg.naturalWidth > 0) {
+    const tw = grassImg.naturalWidth, th = grassImg.naturalHeight;
+    const scale = Math.max(c.width / tw, c.height / th) * 0.5;
+    const w = tw * scale, h = th * scale;
+    for (let gx = 0; gx < c.width; gx += w) {
+      for (let gy = 0; gy < c.height; gy += h) {
+        x.drawImage(grassImg, gx, gy, w, h);
+      }
+    }
+  } else {
+    x.fillStyle = '#5f8f3f';
+    x.fillRect(0, 0, c.width, c.height);
+  }
+
+  x.fillStyle = '#9a9a9a';
+  for (const rd of roads) x.fillRect(rd.x, rd.y, rd.w, rd.h);
+  x.fillStyle = '#8a8a8a';
+  for (const rd of roads) {
+    x.fillRect(rd.x, rd.y, rd.w, 3);
+    x.fillRect(rd.x, rd.y + rd.h - 3, rd.w, 3);
+  }
+
+  for (const h of houses) {
+    if (houseImg.complete && houseImg.naturalWidth > 0) {
+      x.drawImage(houseImg, h.x, h.y, h.w, h.h);
+    } else {
+      x.fillStyle = '#a0784f';
+      x.fillRect(h.x, h.y, h.w, h.h);
+    }
+  }
+}
+
+function drawBar(cx, cy, bw, bh, ratio) {
+  const bx = cx - bw / 2, by = cy;
+  x.fillStyle = '#b22222';
+  x.fillRect(bx, by, bw, bh);
+  x.fillStyle = '#3ddc5a';
+  x.fillRect(bx, by, bw * Math.max(0, ratio), bh);
+  x.strokeStyle = '#000';
+  x.lineWidth = 2;
+  x.strokeRect(bx, by, bw, bh);
+}
+
+function drawEnemyHp(cl) {
+  drawBar(cl.x, cl.y - cl.r - 12, cl.r * 2, 6, cl.hp / (cl.andrey ? ANDREY_HP : CLONE_HP));
+}
+
+function drawPlayerHp() {
+  drawBar(px, py - r - 16, r * 2, 8, playerHp / PLAYER_MAX_HP);
+}
+
+function drawTimer() {
+  const secs = Math.floor(elapsed / 1000);
+  const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+  const ss = String(secs % 60).padStart(2, '0');
+  x.font = 'bold 28px sans-serif';
+  x.textAlign = 'center';
+  x.fillStyle = 'rgba(0,0,0,0.5)';
+  x.fillRect(c.width / 2 - 60, 10, 120, 44);
+  x.strokeStyle = '#000';
+  x.lineWidth = 2;
+  x.strokeRect(c.width / 2 - 60, 10, 120, 44);
+  x.fillStyle = '#fff';
+  x.fillText(mm + ':' + ss, c.width / 2, 42);
+}
+
+function loop() {
+  if (gameOver || !started || paused) { requestAnimationFrame(loop); return; }
+
+  elapsed = performance.now() - startTime;
+
+  let dx = 0, dy = 0;
+  if (keys['KeyW']) dy -= speed;
+  if (keys['KeyS']) dy += speed;
+  if (keys['KeyA']) dx -= speed;
+  if (keys['KeyD']) dx += speed;
+
+  if (!collides(px + dx, py, r)) px += dx;
+  if (!collides(px, py + dy, r)) py += dy;
+
+  px = Math.max(r, Math.min(c.width - r, px));
+  py = Math.max(r, Math.min(c.height - r, py));
+
+  if (keys['Space'] || mouseDown) shoot();
+  if (cooldown > 0) cooldown--;
+
+  spawnTimer++;
+  if (spawnTimer >= SPAWN_INTERVAL) { spawnTimer = 0; spawnClones(); }
+
+  const now = performance.now();
+  for (const cl of clones) {
+    const a = Math.atan2(py - cl.y, px - cl.x);
+    let dist = Math.hypot(px - cl.x, py - cl.y);
+    const minDist = r + cl.r - 6;
+
+    if (dist < minDist) {
+      if (now - lastHitTime >= CLONE_HIT_COOLDOWN) {
+        lastHitTime = now;
+        playerHp -= 1;
+        if (playerHp <= 0) {
+          playerHp = 0;
+          endGame(cl.andrey);
+        }
+      }
+    }
+
+    if (dist > minDist) {
+      moveWithCollision(cl, Math.cos(a) * cl.speed, Math.sin(a) * cl.speed);
+    } else if (dist > 0) {
+      const push = minDist - dist;
+      const nx2 = cl.x - (px - cl.x) / dist * push;
+      const ny2 = cl.y - (py - cl.y) / dist * push;
+      if (!collides(nx2, ny2, cl.r)) { cl.x = nx2; cl.y = ny2; }
+    }
+  }
+
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.x += b.vx; b.y += b.vy;
+
+    if (collides(b.x, b.y, 4)) {
+      bullets.splice(i, 1);
+      continue;
+    }
+
+    for (let j = clones.length - 1; j >= 0; j--) {
+      const cl = clones[j];
+      if (b.hits.has(cl.id)) continue;
+      if (Math.hypot(b.x - cl.x, b.y - cl.y) < cl.r) {
+        b.hits.add(cl.id);
+        cl.hp -= b.damage;
+        if (cl.hp <= 0) clones.splice(j, 1);
+        if (!b.pierce) { bullets.splice(i, 1); break; }
+      }
+    }
+    if (bullets[i] === b && (b.x < -60 || b.x > c.width + 60 || b.y < -60 || b.y > c.height + 60)) {
+      bullets.splice(i, 1);
+    }
+  }
+
+  drawMap();
+
+  for (const cl of clones) {
+    const im = cl.andrey ? andreyImg : cloneImg;
+    x.drawImage(im, cl.x - cl.r, cl.y - cl.r, cl.r * 2, cl.r * 2);
+    drawEnemyHp(cl);
+  }
+
+  for (const b of bullets) {
+    x.save();
+    x.translate(b.x, b.y);
+    x.rotate(b.ang);
+    x.drawImage(bulImg, -12, -6, 24, 12);
+    x.restore();
+  }
+
+  const ang = Math.atan2(my - py, mx - px);
+  x.drawImage(img, px - r, py - r, r * 2, r * 2);
+  x.save();
+  x.translate(px, py);
+  x.rotate(ang);
+  if (Math.cos(ang) < 0) {
+    x.scale(1, -1);
+  }
+  x.drawImage(weapon.img, weapon.offX, weapon.offY, weapon.w, weapon.h);
+  x.restore();
+
+  drawPlayerHp();
+  drawTimer();
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
