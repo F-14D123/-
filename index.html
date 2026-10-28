@@ -68,6 +68,7 @@
     margin: 0;
     min-width: 260px;
   }
+  #fullscreenBtn { display: none; }
 
   /* мобильные стрелки */
   #mobileControls { position: fixed; left: 20px; bottom: 20px; z-index: 5; display: none; }
@@ -96,6 +97,7 @@
   <div class="menu-bottom">
     <button class="main-btn" onclick="showMenu('menu')">Играть</button>
     <button class="main-btn" onclick="showMenu('settings')">Настройки</button>
+    <button class="main-btn" id="fullscreenBtn" onclick="openFullscreen()">Во весь экран</button>
   </div>
 </div>
 
@@ -241,8 +243,19 @@ addEventListener('resize', resize);
 document.addEventListener('fullscreenchange', () => setTimeout(resize, 50));
 document.addEventListener('webkitfullscreenchange', () => setTimeout(resize, 50));
 
+// полноэкранный режим
+function openFullscreen() {
+  const elem = document.documentElement;
+  const req = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
+  if (req) {
+    const p = req.call(elem);
+    if (p && p.catch) p.catch(() => {});
+  }
+}
+
 function pickPlatform(p) {
   isMobile = (p === 'mobile');
+  document.getElementById('fullscreenBtn').style.display = isMobile ? 'block' : 'none';
   document.getElementById('platform').style.display = 'none';
   document.getElementById('mainmenu').style.display = 'flex';
 }
