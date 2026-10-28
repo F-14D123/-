@@ -15,7 +15,8 @@
   }
   #platform { display: flex; }
   #mainmenu { display: none; }
-  #over h1 { color: #ff2b2b; font-size: 42px; text-align: center; margin: 0 0 40px; }
+  #over h1 { color: #ff2b2b; font-size: 42px; text-align: center; margin: 0 0 15px; }
+  #over h2 { color: #fff; font-size: 28px; text-align: center; margin: 0 0 40px; font-weight: normal; }
   #pause h1 { color: #fff; font-size: 42px; margin: 0 0 40px; }
   #menu h1, #maps h1, #settings h1, #platform h1 { color: #fff; font-size: 32px; margin: 0 0 30px; text-align: center; }
   .items { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 1100px; }
@@ -42,7 +43,6 @@
     border: none; border-radius: 8px; background: #4fc3f7;
   }
 
-  /* главное меню */
   #mainmenu {
     background: url('textoures/USSR.jfif') center/cover no-repeat, #1a1a1a;
     align-items: flex-start;
@@ -64,13 +64,9 @@
     gap: 12px;
     margin-bottom: 10px;
   }
-  .menu-bottom .main-btn {
-    margin: 0;
-    min-width: 260px;
-  }
+  .menu-bottom .main-btn { margin: 0; min-width: 260px; }
   #fullscreenBtn { display: none; }
 
-  /* мобильные стрелки */
   #mobileControls { position: fixed; left: 20px; bottom: 20px; z-index: 5; display: none; }
   #mobileControls .row { display: flex; justify-content: center; }
   .arr {
@@ -131,10 +127,10 @@
 <div id="maps">
   <h1>Выбери карту</h1>
   <div class="items">
-    <div class="btn locked" onclick="return false">
-      <div class="preview" style="background:linear-gradient(135deg,#c8a86a,#8a6d3b)"></div>
-      <b>Даст из CS2</b>
-      <span>скоро…</span>
+    <div class="btn" onclick="startGame('boss')">
+      <div class="preview" style="background:linear-gradient(135deg,#8a3b2e,#3f1f18)"></div>
+      <b>Босс в деревне</b>
+      <span>Босс 1 · 250 ХП · 8 пуль · 360°</span>
     </div>
     <div class="btn" onclick="startGame('village')">
       <div class="preview" style="background:linear-gradient(135deg,#6fa34a,#3f6b2a)"></div>
@@ -152,7 +148,9 @@
 
 <div id="over">
   <h1 id="overText">эээ ну это мой клип пиарят</h1>
-  <button onclick="restart()">заново</button>
+  <h2 id="overSub"></h2>
+  <button id="overRestart" onclick="restart()">заново</button>
+  <button id="overMenu" class="main-btn" onclick="pauseToMenu()">Меню</button>
 </div>
 
 <div id="mobileControls">
@@ -184,6 +182,7 @@ const cloneImg = new Image(); cloneImg.src = TEX + 'klon.png';
 const andreyImg = new Image(); andreyImg.src = TEX + 'andrey.jfif';
 const houseImg = new Image(); houseImg.src = TEX + 'dom.png';
 const grassImg = new Image(); grassImg.src = TEX + 'trava.jfif';
+const bombImg = new Image(); bombImg.src = TEX + 'bomb.png';
 
 const WEAPONS = {
   ak: {
@@ -217,13 +216,43 @@ const SPAWN_COUNT = 3;
 const SPAWN_MIN_DIST = 250;
 const ANDREY_CHANCE = 0.2;
 
+const BOSS_R = Math.round(r * 2.5);
+const BOSS_HP = 250;
+const BOSS_SPEED = 1.6 * 0.9;
+const BOSS_SHOOT_INTERVAL = 8000;
+const BOSS_SHOOT_COUNT = 8;
+const BOSS_SHOOT_SPREAD = 360;
+const BOSS_BULLET_SPEED = 7;
+const BOSS_BULLET_DAMAGE = 1;
+const BOSS_HIT_DAMAGE = 2;
+const BOSS_HIT_COOLDOWN = 1000;
+
+const BOSS_ENTER_TIME = 2000;
+const BOSS_WARNING_TIME = 2000;
+
+const HOUSE_TIME = 1000;
+const BOMB_TIME = 1000;
+const BOMB_SCALE = 2;
+
 let weapon = null, mapType = null, started = false, paused = false;
 const bullets = [];
+const bossBullets = [];
 let clones = [];
+let boss = null;
+let bombs = [];
+let housesTimer = 0;
 let cooldown = 0, spawnTimer = 0, gameOver = false;
 let startTime = 0, elapsed = 0, pauseStart = 0;
 let playerHp = PLAYER_MAX_HP;
 let lastHitTime = 0;
+let lastBossHitTime = 0;
+let bossShootTimer = 0;
+let isBossMap = false;
+let housesVisible = true;
+
+let bossPhase = 'fight';
+let bossPhaseTimer = 0;
+let bossHomeX = 0, bossHomeY = 0;
 
 let houses = [];
 let roads = [];
@@ -243,7 +272,6 @@ addEventListener('resize', resize);
 document.addEventListener('fullscreenchange', () => setTimeout(resize, 50));
 document.addEventListener('webkitfullscreenchange', () => setTimeout(resize, 50));
 
-// полноэкранный режим
 function openFullscreen() {
   const elem = document.documentElement;
   const req = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
@@ -295,8 +323,9 @@ function chooseWeapon(key) {
 }
 
 function startGame(mapKey) {
-  if (mapKey !== 'village') return;
+  if (mapKey !== 'village' && mapKey !== 'boss') return;
   mapType = mapKey;
+  isBossMap = (mapKey === 'boss');
   document.getElementById('maps').style.display = 'none';
   started = true;
   paused = false;
@@ -307,34 +336,62 @@ function startGame(mapKey) {
 function restart() {
   document.getElementById('over').style.display = 'none';
   document.getElementById('maps').style.display = 'none';
-  document.getElementById('menu').style.display = 'none';
   document.getElementById('pause').style.display = 'none';
   document.getElementById('mobileControls').style.display = 'none';
-  document.getElementById('mainmenu').style.display = 'flex';
+  document.getElementById('menu').style.display = 'flex';
   started = false;
   paused = false;
   gameOver = false;
   weapon = null;
   clones = [];
   bullets.length = 0;
+  bossBullets.length = 0;
+  bombs = [];
+  boss = null;
 }
 
 function reset() {
   px = c.width / 2;
   py = c.height / 2;
   bullets.length = 0;
+  bossBullets.length = 0;
   clones = [];
+  bombs = [];
+  boss = null;
   cooldown = 0;
   spawnTimer = 0;
   gameOver = false;
   playerHp = PLAYER_MAX_HP;
   lastHitTime = 0;
+  lastBossHitTime = 0;
+  bossShootTimer = 0;
   startTime = performance.now();
   elapsed = 0;
-  if (collides(px, py, r)) { px = 60; py = 60; }
+  housesVisible = true;
+  housesTimer = 0;
+
+  if (isBossMap) {
+    bombs = houses.map(h => ({ x: h.x, y: h.y, w: h.w, h: h.h }));
+
+    bossHomeX = c.width / 2;
+    bossHomeY = BOSS_R + 20;
+    boss = {
+      x: bossHomeX,
+      y: -BOSS_R,
+      r: BOSS_R,
+      hp: BOSS_HP,
+      speed: BOSS_SPEED
+    };
+    bossPhase = 'enter';
+    bossPhaseTimer = 0;
+  } else {
+    bossPhase = 'fight';
+    if (collides(px, py, r)) { px = 60; py = 60; }
+  }
 }
 
 function collides(x0, y0, rad) {
+  if (!housesVisible) return false;
   for (const h of houses) {
     const nx = Math.max(h.x, Math.min(x0, h.x + h.w));
     const ny = Math.max(h.y, Math.min(y0, h.y + h.h));
@@ -367,6 +424,10 @@ function pauseToMenu() {
   weapon = null;
   clones = [];
   bullets.length = 0;
+  bossBullets.length = 0;
+  bombs = [];
+  boss = null;
+  document.getElementById('over').style.display = 'none';
   document.getElementById('pause').style.display = 'none';
   document.getElementById('mobileControls').style.display = 'none';
   document.getElementById('mainmenu').style.display = 'flex';
@@ -374,9 +435,19 @@ function pauseToMenu() {
 
 function endGame(byAndrey) {
   gameOver = true;
-  document.getElementById('overText').textContent = byAndrey
-    ? 'цыган горбатый'
-    : 'эээ ну это мой клип пиарят';
+  document.getElementById('overText').style.color = byAndrey ? '#ff2b2b' : '#3ddc5a';
+  if (byAndrey) {
+    document.getElementById('overText').textContent = 'Впитал как губка';
+    document.getElementById('overSub').textContent = '';
+  } else {
+    document.getElementById('overText').textContent = 'Победа';
+    document.getElementById('overSub').textContent = 'твоя папа';
+  }
+
+  const isBossLoss = byAndrey && isBossMap;
+  document.getElementById('overMenu').style.display = isBossLoss ? 'none' : 'block';
+  document.getElementById('overRestart').style.display = 'block';
+
   document.getElementById('over').style.display = 'flex';
   document.getElementById('mobileControls').style.display = 'none';
 }
@@ -395,12 +466,10 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseDown = false; });
 
-// ПК: мышь
 addEventListener('mousemove', e => { if (!isMobile) { mx = e.clientX; my = e.clientY; } });
 addEventListener('mousedown', e => { if (!isMobile && e.button === 0) mouseDown = true; });
 addEventListener('mouseup', e => { if (!isMobile && e.button === 0) mouseDown = false; });
 
-// Телефон: тап по экрану = прицел + выстрел
 c.addEventListener('touchstart', e => {
   if (!isMobile || !started || paused || gameOver) return;
   const t = e.touches[0];
@@ -423,7 +492,6 @@ c.addEventListener('touchend', e => {
   e.preventDefault();
 }, { passive: false });
 
-// мобильные стрелки
 for (const el of document.querySelectorAll('#mobileControls .arr')) {
   const code = el.dataset.key;
   const press = ev => { ev.preventDefault(); keys[code] = true; };
@@ -472,6 +540,23 @@ function shoot() {
   }
 }
 
+function bossShoot() {
+  if (!boss) return;
+  const step = (Math.PI * 2) / BOSS_SHOOT_COUNT;
+  const startOffset = Math.random() * step;
+  for (let i = 0; i < BOSS_SHOOT_COUNT; i++) {
+    const a = startOffset + i * step;
+    bossBullets.push({
+      x: boss.x + Math.cos(a) * boss.r,
+      y: boss.y + Math.sin(a) * boss.r,
+      vx: Math.cos(a) * BOSS_BULLET_SPEED,
+      vy: Math.sin(a) * BOSS_BULLET_SPEED,
+      ang: a,
+      damage: BOSS_BULLET_DAMAGE
+    });
+  }
+}
+
 function spawnPoint(radius, extra) {
   for (let tries = 0; tries < 100; tries++) {
     const side = Math.floor(Math.random() * 4);
@@ -486,6 +571,7 @@ function spawnPoint(radius, extra) {
 }
 
 function spawnClones() {
+  if (isBossMap) return;
   for (let i = 0; i < SPAWN_COUNT; i++) {
     if (Math.random() < ANDREY_CHANCE) {
       const p = spawnPoint(ANDREY_R, 5);
@@ -528,12 +614,27 @@ function drawMap() {
     x.fillRect(rd.x, rd.y + rd.h - 3, rd.w, 3);
   }
 
-  for (const h of houses) {
-    if (houseImg.complete && houseImg.naturalWidth > 0) {
-      x.drawImage(houseImg, h.x, h.y, h.w, h.h);
-    } else {
-      x.fillStyle = '#a0784f';
-      x.fillRect(h.x, h.y, h.w, h.h);
+  if (housesVisible) {
+    for (const h of houses) {
+      if (houseImg.complete && houseImg.naturalWidth > 0) {
+        x.drawImage(houseImg, h.x, h.y, h.w, h.h);
+      } else {
+        x.fillStyle = '#a0784f';
+        x.fillRect(h.x, h.y, h.w, h.h);
+      }
+    }
+  } else {
+    for (const b of bombs) {
+      const bw = b.w * BOMB_SCALE;
+      const bh = b.h * BOMB_SCALE;
+      const bx = b.x + b.w / 2 - bw / 2;
+      const by = b.y + b.h / 2 - bh / 2;
+      if (bombImg.complete && bombImg.naturalWidth > 0) {
+        x.drawImage(bombImg, bx, by, bw, bh);
+      } else {
+        x.fillStyle = '#ff6600';
+        x.fillRect(bx, by, bw, bh);
+      }
     }
   }
 }
@@ -572,10 +673,68 @@ function drawTimer() {
   x.fillText(mm + ':' + ss, c.width / 2, 42);
 }
 
-function loop() {
-  if (gameOver || !started || paused) { requestAnimationFrame(loop); return; }
+function drawWarning() {
+  if (!boss) return;
+  x.font = 'bold 36px sans-serif';
+  x.textAlign = 'center';
+  x.fillStyle = '#ff2b2b';
+  x.strokeStyle = '#000';
+  x.lineWidth = 4;
+  const text = 'Уходи отсюда';
+  const tx = boss.x;
+  const ty = boss.y + boss.r + 50;
+  x.strokeText(text, tx, ty);
+  x.fillText(text, tx, ty);
+}
 
-  elapsed = performance.now() - startTime;
+let lastFrameTime = performance.now();
+
+function loop() {
+  const now = performance.now();
+  const dt = now - lastFrameTime;
+  lastFrameTime = now;
+
+  if (gameOver || !started || paused) {
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  elapsed = now - startTime;
+
+  if (isBossMap) {
+    housesTimer += dt;
+    if (housesVisible && housesTimer >= HOUSE_TIME) {
+      housesVisible = false;
+    } else if (!housesVisible && housesTimer >= HOUSE_TIME + BOMB_TIME) {
+      bombs = [];
+    }
+  }
+
+  if (isBossMap && boss) {
+    if (bossPhase === 'enter') {
+      const dy2 = bossHomeY - boss.y;
+      if (Math.abs(dy2) < 4) {
+        boss.y = bossHomeY;
+        bossPhase = 'warning';
+        bossPhaseTimer = 0;
+      } else {
+        boss.y += Math.sign(dy2) * Math.min(Math.abs(dy2), BOSS_SPEED * 2.5 * (dt / 16.67));
+      }
+      bossPhaseTimer += dt;
+      if (bossPhaseTimer > 1500 && bossPhase === 'enter') {
+        boss.y = bossHomeY;
+        bossPhase = 'warning';
+        bossPhaseTimer = 0;
+      }
+    } else if (bossPhase === 'warning') {
+      bossPhaseTimer += dt;
+      if (bossPhaseTimer >= BOSS_WARNING_TIME) {
+        bossPhase = 'fight';
+        bossPhaseTimer = 0;
+        bossShootTimer = 0;
+      }
+    }
+  }
 
   let dx = 0, dy = 0;
   if (keys['KeyW']) dy -= speed;
@@ -595,7 +754,6 @@ function loop() {
   spawnTimer++;
   if (spawnTimer >= SPAWN_INTERVAL) { spawnTimer = 0; spawnClones(); }
 
-  const now = performance.now();
   for (const cl of clones) {
     const a = Math.atan2(py - cl.y, px - cl.x);
     let dist = Math.hypot(px - cl.x, py - cl.y);
@@ -607,7 +765,7 @@ function loop() {
         playerHp -= 1;
         if (playerHp <= 0) {
           playerHp = 0;
-          endGame(cl.andrey);
+          endGame(true);
         }
       }
     }
@@ -620,6 +778,55 @@ function loop() {
       const ny2 = cl.y - (py - cl.y) / dist * push;
       if (!collides(nx2, ny2, cl.r)) { cl.x = nx2; cl.y = ny2; }
     }
+  }
+
+  // БОСС: квадратная коллизия AABB
+  if (boss && bossPhase === 'fight') {
+    const bossSize = boss.r * 2;
+    const bx0 = boss.x - boss.r, by0 = boss.y - boss.r;
+
+    const playerL = px - r, playerR = px + r;
+    const playerT = py - r, playerB = py + r;
+    const bossL = bx0, bossR = bx0 + bossSize;
+    const bossT = by0, bossB = by0 + bossSize;
+
+    const overlapX = Math.min(playerR, bossR) - Math.max(playerL, bossL);
+    const overlapY = Math.min(playerB, bossB) - Math.max(playerT, bossT);
+
+    if (overlapX > 0 && overlapY > 0) {
+      if (now - lastBossHitTime >= BOSS_HIT_COOLDOWN) {
+        lastBossHitTime = now;
+        playerHp -= BOSS_HIT_DAMAGE;
+        if (playerHp <= 0) {
+          playerHp = 0;
+          endGame(true);
+        }
+      }
+    }
+
+    const a = Math.atan2(py - boss.y, px - boss.x);
+
+    bossShootTimer += dt;
+    if (bossShootTimer >= BOSS_SHOOT_INTERVAL) {
+      bossShootTimer = 0;
+      bossShoot();
+    }
+
+    if (overlapX > 0 && overlapY > 0) {
+      if (overlapX < overlapY) {
+        const dir = (boss.x < px) ? -1 : 1;
+        boss.x += dir * (overlapX + 1);
+      } else {
+        const dir = (boss.y < py) ? -1 : 1;
+        boss.y += dir * (overlapY + 1);
+      }
+    } else {
+      boss.x += Math.cos(a) * boss.speed;
+      boss.y += Math.sin(a) * boss.speed;
+    }
+
+    boss.x = Math.max(boss.r, Math.min(c.width - boss.r, boss.x));
+    boss.y = Math.max(boss.r, Math.min(c.height - boss.r, boss.y));
   }
 
   for (let i = bullets.length - 1; i >= 0; i--) {
@@ -641,8 +848,40 @@ function loop() {
         if (!b.pierce) { bullets.splice(i, 1); break; }
       }
     }
+
+    // попадание по квадрату босса
+    if (boss && bossPhase === 'fight' && bullets[i] === b) {
+      if (Math.abs(b.x - boss.x) < boss.r && Math.abs(b.y - boss.y) < boss.r) {
+        boss.hp -= b.damage;
+        if (boss.hp <= 0) {
+          boss = null;
+          endGame(false);
+        }
+        if (!b.pierce) { bullets.splice(i, 1); continue; }
+      }
+    }
+
     if (bullets[i] === b && (b.x < -60 || b.x > c.width + 60 || b.y < -60 || b.y > c.height + 60)) {
       bullets.splice(i, 1);
+    }
+  }
+
+  for (let i = bossBullets.length - 1; i >= 0; i--) {
+    const bb = bossBullets[i];
+    bb.x += bb.vx; bb.y += bb.vy;
+
+    if (Math.hypot(bb.x - px, bb.y - py) < r) {
+      playerHp -= bb.damage;
+      bossBullets.splice(i, 1);
+      if (playerHp <= 0) {
+        playerHp = 0;
+        endGame(true);
+      }
+      continue;
+    }
+
+    if (bb.x < -60 || bb.x > c.width + 60 || bb.y < -60 || bb.y > c.height + 60) {
+      bossBullets.splice(i, 1);
     }
   }
 
@@ -654,11 +893,35 @@ function loop() {
     drawEnemyHp(cl);
   }
 
+  if (boss) {
+    if (andreyImg.complete && andreyImg.naturalWidth > 0) {
+      x.drawImage(andreyImg, boss.x - boss.r, boss.y - boss.r, boss.r * 2, boss.r * 2);
+    } else {
+      x.fillStyle = '#c33';
+      x.beginPath(); x.arc(boss.x, boss.y, boss.r, 0, 7); x.fill();
+    }
+    drawBar(boss.x, boss.y - boss.r - 14, boss.r * 2, 8, boss.hp / BOSS_HP);
+    if (bossPhase === 'warning') drawWarning();
+  }
+
   for (const b of bullets) {
     x.save();
     x.translate(b.x, b.y);
     x.rotate(b.ang);
     x.drawImage(bulImg, -12, -6, 24, 12);
+    x.restore();
+  }
+
+  for (const bb of bossBullets) {
+    x.save();
+    x.translate(bb.x, bb.y);
+    x.rotate(bb.ang);
+    if (bulImg.complete && bulImg.naturalWidth > 0) {
+      x.drawImage(bulImg, -12, -6, 24, 12);
+    } else {
+      x.fillStyle = '#ff4444';
+      x.beginPath(); x.arc(0, 0, 6, 0, 7); x.fill();
+    }
     x.restore();
   }
 
@@ -678,6 +941,7 @@ function loop() {
 
   requestAnimationFrame(loop);
 }
+lastFrameTime = performance.now();
 loop();
 </script>
 </body>
