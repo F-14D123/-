@@ -138,6 +138,16 @@ body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; }
   user-select: none; touch-action: none;
 }
 .act:active { background: rgba(79,195,247,0.6); }
+#joy {
+  position: relative; width: 140px; height: 140px; border-radius: 50%;
+  background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.4);
+  touch-action: none;
+}
+#joyKnob {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  border-radius: 50%; background: rgba(255,255,255,0.45); border: 2px solid rgba(255,255,255,0.8);
+  pointer-events: none;
+}
 </style>
 </head>
 <body>
@@ -238,12 +248,7 @@ body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; }
 </div>
 
 <div id="mobileControls">
-  <div class="row"><div class="arr" data-key="KeyW">↑</div></div>
-  <div class="row">
-    <div class="arr" data-key="KeyA">←</div>
-    <div class="arr" data-key="KeyS">↓</div>
-    <div class="arr" data-key="KeyD">→</div>
-  </div>
+  <div id="joy"><div id="joyKnob"></div></div>
   <div class="act" id="btnG"    style="right:20px;bottom:20px">💣</div>
   <div class="act" id="btnF"    style="right:96px;bottom:20px">🛸</div>
   <div class="act" id="btnZin"  style="right:20px;bottom:96px">＋</div>
@@ -713,17 +718,43 @@ c.addEventListener('touchend', e => {
   e.preventDefault();
 }, { passive: false });
 
-for (const el of document.querySelectorAll('#mobileControls .arr')) {
-  const code = el.dataset.key;
-  const press = ev => { ev.preventDefault(); keys[code] = true; };
-  const release = ev => { ev.preventDefault(); keys[code] = false; };
-  el.addEventListener('touchstart', press, { passive: false });
-  el.addEventListener('touchend', release, { passive: false });
-  el.addEventListener('touchcancel', release, { passive: false });
-  el.addEventListener('mousedown', press);
-  el.addEventListener('mouseup', release);
-  el.addEventListener('mouseleave', release);
+const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
+let joyId = null;
+const JOY_R = 50, JOY_DEAD = 18;
+
+function joyUpdate(t) {
+  const rc = joy.getBoundingClientRect();
+  let dx = t.clientX - (rc.left + rc.width / 2);
+  let dy = t.clientY - (rc.top + rc.height / 2);
+  const d = Math.hypot(dx, dy);
+  if (d > JOY_R) { dx = dx / d * JOY_R; dy = dy / d * JOY_R; }
+  knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  keys['KeyA'] = dx < -JOY_DEAD;
+  keys['KeyD'] = dx > JOY_DEAD;
+  keys['KeyW'] = dy < -JOY_DEAD;
+  keys['KeyS'] = dy > JOY_DEAD;
 }
+function joyReset() {
+  joyId = null;
+  knob.style.transform = 'translate(0,0)';
+  keys['KeyA'] = keys['KeyD'] = keys['KeyW'] = keys['KeyS'] = false;
+}
+joy.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  joyId = t.identifier;
+  joyUpdate(t);
+}, { passive: false });
+joy.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) if (t.identifier === joyId) joyUpdate(t);
+}, { passive: false });
+const joyEnd = e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) if (t.identifier === joyId) joyReset();
+};
+joy.addEventListener('touchend', joyEnd, { passive: false });
+joy.addEventListener('touchcancel', joyEnd, { passive: false });
 
 function spawnBullet(ang, spd, dmg, pierce) {
   const flip = Math.cos(ang) < 0;
