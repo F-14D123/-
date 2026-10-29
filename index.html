@@ -139,12 +139,12 @@ body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; }
 }
 .act:active { background: rgba(79,195,247,0.6); }
 #joy {
-  position: relative; width: 140px; height: 140px; border-radius: 50%;
+  position: relative; width: 280px; height: 280px; border-radius: 50%;
   background: rgba(255,255,255,0.12); border: 2px solid rgba(255,255,255,0.4);
   touch-action: none;
 }
 #joyKnob {
-  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
+  position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px;
   border-radius: 50%; background: rgba(255,255,255,0.45); border: 2px solid rgba(255,255,255,0.8);
   pointer-events: none;
 }
@@ -720,7 +720,7 @@ c.addEventListener('touchend', e => {
 
 const joy = document.getElementById('joy'), knob = document.getElementById('joyKnob');
 let joyId = null;
-const JOY_R = 50, JOY_DEAD = 18;
+const JOY_R = 100, JOY_DEAD = 36;
 
 function joyUpdate(t) {
   const rc = joy.getBoundingClientRect();
